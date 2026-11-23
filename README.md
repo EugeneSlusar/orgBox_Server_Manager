@@ -1,5 +1,5 @@
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/v0.1.0/install.sh | ORGBOX_VERSION=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/v0.3.0/install.sh | ORGBOX_VERSION=v0.3.0 bash
 ```
 
 # orgBox Server Manager
@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/
 
 ## Быстрый старт
 
-Выполни первую команду README в SSH-терминале — она устанавливает фиксированный релиз v0.1.0. Если используешь другую оболочку или хочешь проверить содержимое установщика перед запуском:
+Выполни первую команду README в SSH-терминале — она устанавливает фиксированный релиз v0.3.0. Если используешь другую оболочку или хочешь проверить содержимое установщика перед запуском:
 
 ```bash
 curl -fsSLo /tmp/orgbox-install.sh https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/main/install.sh
@@ -37,7 +37,7 @@ bash /tmp/orgbox-install.sh
 [Релизы GitHub](https://github.com/EugeneSlusar/orgBox_Server_Manager/releases). Для установки конкретной версии (после публикации соответствующего тега):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/v0.1.0/install.sh | ORGBOX_VERSION=v0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/v0.3.0/install.sh | ORGBOX_VERSION=v0.3.0 bash
 ```
 
 Установщик сохраняет существующие `manager.conf` и `manager.csv`. При повторном запуске обновляет `manager.sh` и регистрацию автоматического сбора; уже созданные пункты меню не удаляет. Версия `main` получает последние опубликованные изменения в основной ветке; для стабильного окружения рекомендуется фиксированный релиз.
