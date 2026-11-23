@@ -6,6 +6,7 @@ set -u
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 CONF="$DIR/manager.conf"
 DATA="$DIR/manager.csv"
+DISK_DATA="$DIR/disks.csv"
 LOCK="$DIR/.manager.lock"
 MARKER_START='# >>> orgbox_server_manager >>>'
 MARKER_END='# <<< orgbox_server_manager <<<' 
@@ -13,7 +14,7 @@ DEFAULT_PERIOD=72
 REFRESH_SECONDS=3
 HISTORY_DAYS=30
 SAMPLE_SECONDS=60
-GRAPH_HEIGHT=10
+GRAPH_HEIGHT=5
 SERVER_NAME="$(hostname 2>/dev/null || printf 'server')"
 MENU_KEYS=() MENU_LABELS=() MENU_CMDS=()
 
@@ -40,12 +41,12 @@ load_config() {
         REFRESH_SECONDS) [[ "$val" =~ ^[0-9]{1,2}$ ]] && ((10#$val>=1 && 10#$val<=60)) && REFRESH_SECONDS="$((10#$val))" ;;
         HISTORY_DAYS) [[ "$val" =~ ^[0-9]{1,3}$ ]] && ((10#$val>=1 && 10#$val<=365)) && HISTORY_DAYS="$((10#$val))" ;;
         SAMPLE_SECONDS) [[ "$val" =~ ^(60|120|300|600)$ ]] && SAMPLE_SECONDS="$val" ;;
-        GRAPH_HEIGHT) [[ "$val" =~ ^[0-9]{1,2}$ ]] && ((10#$val>=4 && 10#$val<=15)) && GRAPH_HEIGHT="$((10#$val))" ;;
+        GRAPH_HEIGHT) [[ "$val" =~ ^[0-9]{1,2}$ ]] && ((10#$val>=3 && 10#$val<=15)) && GRAPH_HEIGHT="$((10#$val))" ;;
       esac
     elif [[ "$line" == *'|'* ]]; then
       IFS='|' read -r key label cmd <<< "$line"
       key="$(trim "$key")"; label="$(trim "$label")"; cmd="$(trim "$cmd")"
-      reserved='123reqx'
+      reserved='123reqxd'
       if [[ "$key" =~ ^[a-zA-Z0-9]$ && "$reserved" != *"${key,,}"* && -n "$label" && -n "$cmd" ]]; then
         MENU_KEYS+=("$key"); MENU_LABELS+=("$label"); MENU_CMDS+=("$cmd")
       fi
@@ -64,13 +65,84 @@ cpu_usage() {
 ram_usage() { awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {if(t>0)printf "%.1f",100*(t-a)/t;else printf "0.0"}' /proc/meminfo 2>/dev/null; }
 disk_usage() { df -P / 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5+0; ok=1} END{if(!ok)print "0"}'; }
 
+
+disk_mounts() {
+  df -P -k -l 2>/dev/null | awk 'NR>1 && NF>=6 {
+    fs=$1; mp=$6; pct=$5
+    if (fs !~ /^\\/dev\\// && fs !~ /^UUID=/) next
+    if (seen[fs]++ || mp ~ /,/) next
+    gsub(/%/,"",pct)
+    if (pct !~ /^[0-9]+$/) next
+    printf "%s,%s,%.0f\n",mp,pct,$4*1024
+  }'
+}
+human_bytes() {
+  awk -v b="$1" 'BEGIN {split("B KiB MiB GiB TiB PiB",u," ");i=1;while(b>=1024&&i<6){b/=1024;i++}printf "%.1f %s",b,u[i]}'
+}
+disk_list() {
+  local limit="${1:-0}" count=0 mp used free
+  while IFS=, read -r mp used free; do
+    [[ -n "$mp" ]] || continue
+    printf '%-20.20s [%s] %3s%%  свободно %s\n' "$mp" "$(bar "$used" 10)" "$used" "$(human_bytes "$free")"
+    ((count+=1))
+    if ((limit>0 && count>=limit)); then break; fi
+  done < <(disk_mounts)
+  ((count>0)) || printf '  Локальные разделы не обнаружены\n'
+}
+disk_graph() {
+  local mp="$1" hours="$2" width="$3" now="$4" cutoff=$((now-hours*3600))
+  printf '\nИстория %s · последние %s ч\n' "$mp" "$hours"
+  [[ -s "$DISK_DATA" ]] || { printf '  История ещё не накоплена\n'; return; }
+  awk -F, -v mount="$mp" -v cutoff="$cutoff" -v now="$now" -v width="$width" -v height="$GRAPH_HEIGHT" '
+    NR>1 && $2==mount && $1 ~ /^[0-9]+$/ && $1>=cutoff && $1<=now {
+      ix=int(($1-cutoff)*width/(now-cutoff+1));if(ix>=width)ix=width-1
+      val=$3+0;if(val<0)val=0;if(val>100)val=100
+      if(!(ix in peak)||val>peak[ix])peak[ix]=val
+      sum+=val;cnt++;if(cnt==1||val<min)min=val;if(cnt==1||val>max)max=val
+    }
+    END {
+      if(!cnt){print "  Нет замеров за выбранный период";exit}
+      for(step=height;step>=1;step--){
+        threshold=100*step/height
+        printf "%3.0f%%│",threshold
+        for(i=0;i<width;i++)printf ((i in peak)&&peak[i]>=threshold)?"█":" "
+        printf "\n"
+      }
+      printf "  0%%└";for(i=0;i<width;i++)printf "─";printf "\n"
+      printf "  Среднее %.1f%%  Мин %.1f%%  Макс %.1f%%  Замеров %d\n",sum/cnt,min,max,cnt
+    }' "$DISK_DATA"
+}
+disk_screen() {
+  local hours="$1" key idx=0 cols width now mp used free
+  local -a mounts=()
+  while IFS=, read -r mp used free; do [[ -n "$mp" ]] && mounts+=("$mp"); done < <(disk_mounts)
+  if ((${#mounts[@]}==0)); then printf '\nНет доступных локальных разделов. Enter...'; read -r _; return; fi
+  while :; do
+    now="$(date +%s)"
+    cols="$(tput cols 2>/dev/null || printf 80)"
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    width=$((cols-8)); ((width>72)) && width=72; ((width<12)) && width=12
+    printf '\033[H\033[2JРАЗДЕЛЫ · текущая загрузка\n'
+    disk_list
+    printf '\nВыбран: %s (%s из %s)\n' "${mounts[idx]}" "$((idx+1))" "${#mounts[@]}"
+    disk_graph "${mounts[idx]}" "$hours" "$width" "$now"
+    printf '\n[n] Следующий  [p] Предыдущий  [q] Назад\n'
+    key=''; IFS= read -rsn1 -t "$REFRESH_SECONDS" key || :
+    case "$key" in
+      n|N) idx=$(((idx+1)%${#mounts[@]}));;
+      p|P) idx=$(((idx+${#mounts[@]}-1)%${#mounts[@]}));;
+      q|Q) break;;
+    esac
+  done
+}
+
 release_lock() {
   rm -f -- "$LOCK/pid" 2>/dev/null || :
   rmdir -- "$LOCK" 2>/dev/null || :
 }
 collect() {
   [[ -r /proc/stat && -r /proc/meminfo ]] || { echo 'ERROR: CPU/RAM statistics unavailable in /proc' >&2; return 1; }
-  local pid='' now cpu ram disk tmp cutoff marker last=0
+  local pid='' now cpu ram disk tmp disk_tmp cutoff marker last=0 mp used free
   if ! mkdir -- "$LOCK" 2>/dev/null; then
     if [[ -r "$LOCK/pid" ]]; then read -r pid < "$LOCK/pid"; fi
     if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then return 0; fi
@@ -85,6 +157,10 @@ collect() {
   printf '%s\n' "$$" > "$LOCK/pid"
   trap release_lock EXIT HUP INT TERM
   now="$(date +%s)"; cpu="$(cpu_usage)"; ram="$(ram_usage)"; disk="$(disk_usage)"
+  if [[ ! -s "$DISK_DATA" ]]; then printf 'timestamp,mountpoint,used_percent,free_bytes\n' > "$DISK_DATA"; fi
+  while IFS=, read -r mp used free; do
+    [[ -n "$mp" ]] && printf '%s,%s,%s,%s\n' "$now" "$mp" "$used" "$free" >> "$DISK_DATA"
+  done < <(disk_mounts)
   if [[ ! -s "$DATA" ]]; then printf 'timestamp,cpu,ram,disk\n' > "$DATA"; fi
   printf '%s,%s,%s,%s\n' "$now" "$cpu" "$ram" "$disk" >> "$DATA" || return 1
 
@@ -97,6 +173,12 @@ collect() {
     tmp="$(mktemp "$DIR/.manager-XXXXXX")" || return 1
     if awk -F, -v cutoff="$cutoff" 'NR==1 || ($1 ~ /^[0-9]+$/ && $1>=cutoff)' "$DATA" > "$tmp"; then
       chmod 600 "$tmp"; mv -f -- "$tmp" "$DATA"
+      disk_tmp="$(mktemp "$DIR/.disks-XXXXXX")" || return 1
+      if awk -F, -v cutoff="$cutoff" 'NR==1 || ($1 ~ /^[0-9]+$/ && $1>=cutoff)' "$DISK_DATA" > "$disk_tmp"; then
+        chmod 600 "$disk_tmp"; mv -f -- "$disk_tmp" "$DISK_DATA"
+      else
+        rm -f -- "$disk_tmp"; return 1
+      fi
       printf '%s\n' "$now" > "$marker"
     else
       rm -f -- "$tmp"; return 1
@@ -151,10 +233,12 @@ render() {
   printf 'CPU    [%s] %5s%%\n' "$(bar "$cpu" "$live_width")" "$cpu"
   printf 'RAM    [%s] %5s%%\n' "$(bar "$ram" "$live_width")" "$ram"
   printf 'DISK / [%s] %5s%%\n' "$(bar "$disk" "$live_width")" "$disk"
+  printf '\nДИСКИ · локальные разделы\n'
+  disk_list 5
   graph 2 "$hours" "$width" CPU "$now"
   graph 3 "$hours" "$width" RAM "$now"
   graph 4 "$hours" "$width" 'DISK /' "$now"
-  printf '\n[1] 24ч  [2] 3 дня  [3] 7 дней  [r] Обновить  [e] Редактировать меню\n'
+  printf '\n[1] 24ч  [2] 3 дня  [3] 7 дней  [r] Обновить  [e] Редактировать меню  [d] Все диски\n'
   local i
   for ((i=0;i<${#MENU_KEYS[@]};i++)); do printf '[%s] %s  ' "${MENU_KEYS[i]}" "${MENU_LABELS[i]}"; done
   printf '\n[q] Bash  [x] Выйти из SSH\n'
@@ -203,6 +287,7 @@ run_menu() {
       1) hours=24;; 2) hours=72;; 3) hours=168;; r|R|'') ;;
       q|Q) printf '\033[H\033[2J'; break ;;
       x|X) exit 0 ;;
+      d|D) disk_screen "$hours" ;;
       e|E)
         if command -v "${EDITOR:-nano}" >/dev/null 2>&1; then "${EDITOR:-nano}" "$CONF"; else "${EDITOR:-vi}" "$CONF"; fi
         load_config ;;
