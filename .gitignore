@@ -1,0 +1,7 @@
+# Runtime data and locks
+manager.csv
+.manager.lock/
+.manager-rotation
+.manager-*
+*.swp
+*.bak
