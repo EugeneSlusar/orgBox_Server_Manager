@@ -1,4 +1,4 @@
-name: Publish v0.1.0 release
+name: Publish v0.2.0 release
 on:
   push:
     branches: [main]
@@ -23,13 +23,13 @@ jobs:
         run: |
           bash -n manager.sh
           bash -n install.sh
-      - name: Create v0.1.0 release if missing
+      - name: Create v0.2.0 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG=v0.1.0
+          TAG=v0.2.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists, skipping"
             exit 0
@@ -39,4 +39,4 @@ jobs:
           gh release create "$TAG" "orgbox-server-manager-$TAG.tar.gz" "orgbox-server-manager-$TAG.zip" \
             --target "$GITHUB_SHA" \
             --title "orgBox Server Manager $TAG" \
-            --notes "Первый публичный релиз: терминальный мониторинг CPU/RAM/DISK, настраиваемое меню, история CSV за 30 дней, установка одной командой для текущего пользователя."
+            --notes "Проверка новых GitHub Releases при интерактивном запуске, обновление с подтверждением, сохранение настроек и истории. Включены возможности v0.1.0."
