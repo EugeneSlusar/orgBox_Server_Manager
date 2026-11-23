@@ -1,4 +1,4 @@
-name: Publish v0.3.1 release
+name: Publish v0.3.2 release
 on:
   push:
     branches: [main]
@@ -23,13 +23,13 @@ jobs:
         run: |
           bash -n manager.sh
           bash -n install.sh
-      - name: Create v0.3.1 release if missing
+      - name: Create v0.3.2 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          TAG=v0.3.1
+          TAG=v0.3.2
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG exists, skipping"
             exit 0
@@ -39,4 +39,4 @@ jobs:
           gh release create "$TAG" "orgbox-server-manager-$TAG.tar.gz" "orgbox-server-manager-$TAG.zip" \
             --target "$GITHUB_SHA" \
             --title "orgBox Server Manager $TAG" \
-            --notes "Исправлено направление временной шкалы: новые замеры отображаются слева. Сохранены компактные графики и мониторинг дисков."
+            --notes "Обновление показателей каждые 3 секунды, очистка экрана только при запуске, перерисовка без мерцания, новые замеры слева, компактные графики и мониторинг дисков."
