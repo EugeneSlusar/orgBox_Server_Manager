@@ -11,7 +11,7 @@ LOCK="$DIR/.manager.lock"
 MARKER_START='# >>> orgbox_server_manager >>>'
 MARKER_END='# <<< orgbox_server_manager <<<' 
 DEFAULT_PERIOD=72
-REFRESH_SECONDS=15
+REFRESH_SECONDS=3
 HISTORY_DAYS=30
 SAMPLE_SECONDS=60
 GRAPH_HEIGHT=5
@@ -113,6 +113,7 @@ disk_graph() {
     }' "$DISK_DATA"
 }
 disk_screen() {
+  printf '\033[H\033[2J'
   local hours="$1" key idx=0 cols width now mp used free
   local -a mounts=()
   while IFS=, read -r mp used free; do [[ -n "$mp" ]] && mounts+=("$mp"); done < <(disk_mounts)
@@ -275,6 +276,8 @@ check_updates() {
 }
 
 run_menu() {
+  [[ -t 0 && -t 1 ]] || { echo 'Для просмотра нужен интерактивный терминал' >&2; return 1; }
+  printf '\033[H\033[2J'
   check_updates
   local hours="${1:-$DEFAULT_PERIOD}" key i command_text
   [[ "$hours" =~ ^(24|72|168)$ ]] || hours=72
