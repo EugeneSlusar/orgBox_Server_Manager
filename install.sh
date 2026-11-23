@@ -29,4 +29,8 @@ fi
 cp -- "$tmp/manager.sh" "$DEST/.manager.sh.new"
 chmod 700 "$DEST/.manager.sh.new"
 mv -f -- "$DEST/.manager.sh.new" "$DEST/manager.sh"
+# Record the installed release; main is a development channel.
+if [[ "$REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  printf '%s\n' "${BASH_REMATCH[1]}" > "$DEST/VERSION"
+fi
 exec bash "$DEST/manager.sh" install
