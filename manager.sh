@@ -95,7 +95,7 @@ disk_graph() {
   [[ -s "$DISK_DATA" ]] || { printf '  История ещё не накоплена\n'; return; }
   awk -F, -v mount="$mp" -v cutoff="$cutoff" -v now="$now" -v width="$width" -v height="$GRAPH_HEIGHT" '
     NR>1 && $2==mount && $1 ~ /^[0-9]+$/ && $1>=cutoff && $1<=now {
-      ix=int(($1-cutoff)*width/(now-cutoff+1));if(ix>=width)ix=width-1
+      ix=int((now-$1)*width/(now-cutoff+1));if(ix>=width)ix=width-1
       val=$3+0;if(val<0)val=0;if(val>100)val=100
       if(!(ix in peak)||val>peak[ix])peak[ix]=val
       sum+=val;cnt++;if(cnt==1||val<min)min=val;if(cnt==1||val>max)max=val
@@ -201,7 +201,7 @@ graph() {
   if [[ ! -s "$DATA" ]]; then printf '  История ещё не накоплена\n'; return; fi
   awk -F, -v field="$field" -v cutoff="$cutoff" -v now="$now" -v width="$width" -v height="$GRAPH_HEIGHT" '
     NR>1 && $1 ~ /^[0-9]+$/ && $1>=cutoff && $1<=now {
-      ix=int(($1-cutoff)*width/(now-cutoff+1));if(ix>=width)ix=width-1
+      ix=int((now-$1)*width/(now-cutoff+1));if(ix>=width)ix=width-1
       val=$field+0;if(val<0)val=0;if(val>100)val=100
       if(!(ix in peak)||val>peak[ix])peak[ix]=val
       sum+=val;cnt++;if(cnt==1||val<min)min=val;if(cnt==1||val>max)max=val
