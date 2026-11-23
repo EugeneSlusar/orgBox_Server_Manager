@@ -69,7 +69,7 @@ disk_usage() { df -P / 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5+0; ok
 disk_mounts() {
   df -P -k -l 2>/dev/null | awk 'NR>1 && NF>=6 {
     fs=$1; mp=$6; pct=$5
-    if (fs !~ /^\\/dev\\// && fs !~ /^UUID=/) next
+    if (fs !~ /^\/dev\// && fs !~ /^UUID=/) next
     if (seen[fs]++ || mp ~ /,/) next
     gsub(/%/,"",pct)
     if (pct !~ /^[0-9]+$/) next
