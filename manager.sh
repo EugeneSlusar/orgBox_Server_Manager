@@ -11,7 +11,7 @@ LOCK="$DIR/.manager.lock"
 MARKER_START='# >>> orgbox_server_manager >>>'
 MARKER_END='# <<< orgbox_server_manager <<<' 
 DEFAULT_PERIOD=72
-REFRESH_SECONDS=3
+REFRESH_SECONDS=15
 HISTORY_DAYS=30
 SAMPLE_SECONDS=60
 GRAPH_HEIGHT=5
@@ -122,11 +122,11 @@ disk_screen() {
     cols="$(tput cols 2>/dev/null || printf 80)"
     [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
     width=$((cols-8)); ((width>72)) && width=72; ((width<12)) && width=12
-    printf '\033[H\033[2JРАЗДЕЛЫ · текущая загрузка\n'
+    printf '\033[HРАЗДЕЛЫ · текущая загрузка\n'
     disk_list
     printf '\nВыбран: %s (%s из %s)\n' "${mounts[idx]}" "$((idx+1))" "${#mounts[@]}"
     disk_graph "${mounts[idx]}" "$hours" "$width" "$now"
-    printf '\n[n] Следующий  [p] Предыдущий  [q] Назад\n'
+    printf '\n[n] Следующий  [p] Предыдущий  [q] Назад\n\033[J'
     key=''; IFS= read -rsn1 -t "$REFRESH_SECONDS" key || :
     case "$key" in
       n|N) idx=$(((idx+1)%${#mounts[@]}));;
@@ -227,7 +227,7 @@ render() {
   [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
   width=$((cols-8)); ((width>72)) && width=72; ((width<12)) && width=12
   live_width=$((cols-19)); ((live_width>28)) && live_width=28; ((live_width<8)) && live_width=8
-  printf '\033[H\033[2J'
+  printf '\033[H'
   printf 'orgBox Server Manager  |  %s  |  %s  |  %s\n' "$SERVER_NAME" "$(id -un)" "$(date '+%d.%m.%Y %H:%M:%S')"
   printf 'LIVE · обновление каждые %s сек\n' "$REFRESH_SECONDS"
   printf 'CPU    [%s] %5s%%\n' "$(bar "$cpu" "$live_width")" "$cpu"
@@ -241,7 +241,7 @@ render() {
   printf '\n[1] 24ч  [2] 3 дня  [3] 7 дней  [r] Обновить  [e] Редактировать меню  [d] Все диски\n'
   local i
   for ((i=0;i<${#MENU_KEYS[@]};i++)); do printf '[%s] %s  ' "${MENU_KEYS[i]}" "${MENU_LABELS[i]}"; done
-  printf '\n[q] Bash  [x] Выйти из SSH\n'
+  printf '\n[q] Bash  [x] Выйти из SSH\n\033[J'
 }
 
 # Проверка обновлений выполняется только при запуске интерактивного меню.
