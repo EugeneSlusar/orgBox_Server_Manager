@@ -1,0 +1,42 @@
+name: Publish v0.1.0 release
+on:
+  push:
+    branches: [main]
+    paths:
+      - manager.sh
+      - manager.conf
+      - install.sh
+      - README.md
+      - LICENSE
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash syntax
+        run: |
+          bash -n manager.sh
+          bash -n install.sh
+      - name: Create v0.1.0 release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=v0.1.0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists, skipping"
+            exit 0
+          fi
+          tar -czf "orgbox-server-manager-$TAG.tar.gz" manager.sh manager.conf install.sh README.md LICENSE
+          zip -q "orgbox-server-manager-$TAG.zip" manager.sh manager.conf install.sh README.md LICENSE
+          gh release create "$TAG" "orgbox-server-manager-$TAG.tar.gz" "orgbox-server-manager-$TAG.zip" \
+            --target "$GITHUB_SHA" \
+            --title "orgBox Server Manager $TAG" \
+            --notes "Первый публичный релиз: терминальный мониторинг CPU/RAM/DISK, настраиваемое меню, история CSV за 30 дней, установка одной командой для текущего пользователя."
