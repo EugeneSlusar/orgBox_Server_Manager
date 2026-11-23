@@ -160,7 +160,38 @@ render() {
   printf '\n[q] Bash  [x] Выйти из SSH\n'
 }
 
+# Проверка обновлений выполняется только при запуске интерактивного меню.
+# collect/install/uninstall не обращаются к сети.
+check_updates() {
+  [[ -t 0 && -t 1 ]] || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local current latest response choice installer tmp
+  current="0.1.0"
+  [[ -r "$DIR/VERSION" ]] && read -r current < "$DIR/VERSION"
+  response="$(curl -fsSL --connect-timeout 3 --max-time 6     -H 'Accept: application/vnd.github+json'     'https://api.github.com/repos/EugeneSlusar/orgBox_Server_Manager/releases/latest' 2>/dev/null)" || return 0
+  latest="$(printf '%s\n' "$response" | grep -oE '"tag_name"[[:space:]]*:[[:space:]]*"v?[0-9]+\.[0-9]+\.[0-9]+"' | head -n 1 | sed -E 's/.*"v?([0-9]+\.[0-9]+\.[0-9]+)"/\1/')" 
+  [[ -n "$latest" && "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 0
+  if [[ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -n 1)" == "$latest" && "$latest" != "$current" ]]; then
+    printf '\nДоступна новая версия orgBox Server Manager: v%s (установлена v%s)\n' "$latest" "$current"
+    printf 'Обновить сейчас? [y/N]: '
+    IFS= read -r choice || return 0
+    [[ "$choice" == y || "$choice" == Y || "$choice" == д || "$choice" == Д ]] || return 0
+    tmp="$(mktemp)" || return 0
+    installer="https://raw.githubusercontent.com/EugeneSlusar/orgBox_Server_Manager/v$latest/install.sh"
+    if curl -fsSL --connect-timeout 5 --max-time 30 "$installer" -o "$tmp"; then
+      if bash -n "$tmp" && ORGBOX_VERSION="v$latest" bash "$tmp"; then
+        rm -f "$tmp"
+        exec bash "$DIR/manager.sh" monitor
+      fi
+    fi
+    rm -f "$tmp"
+    printf 'Обновление не удалось. Продолжаем текущую версию.\n'
+    sleep 2
+  fi
+}
+
 run_menu() {
+  check_updates
   local hours="${1:-$DEFAULT_PERIOD}" key i command_text
   [[ "$hours" =~ ^(24|72|168)$ ]] || hours=72
   [[ -t 0 && -t 1 ]] || { echo 'Для просмотра нужен интерактивный терминал' >&2; return 1; }
